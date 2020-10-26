@@ -1,0 +1,8 @@
+prefix=/home/argmm/TTS_and_brandname/catkin_ws/devel
+
+Name: text_msgs
+Description: Description of text_msgs
+Version: 1.1.4
+Cflags: -I/home/argmm/TTS_and_brandname/catkin_ws/devel/include
+Libs: -L${prefix}/lib 
+Requires: geometry_msgs sensor_msgs message_runtime std_msgs

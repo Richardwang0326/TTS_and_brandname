@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<launch>
+    <!-- Launch this file at back car -->
+    <arg name="pkg_name" value="audio_intf" />
+    <arg name="node_name" value="speech"/>
+    <node name="$(arg node_name)_node" pkg="$(arg pkg_name)" type="$(arg node_name).py" output="screen">
+    </node>
+    <include file="$(find textsnake)/launch/text_detection.launch"></include>
+    <include file="$(find moran_text_recog)/launch/text_recognize.launch"></include>
+    <include file="$(find realsense2_camera)/launch/rs_rgbd.launch"></include>   
+</launch>

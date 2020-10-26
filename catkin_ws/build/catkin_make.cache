@@ -1,0 +1,2 @@
+audio_intf:brand_name/realsense-ros-2.2.15/realsense2_camera:brand_name/realsense-ros-2.2.15/realsense2_description:brand_name/system_msgs/text_msgs:brand_name/text_detection/textsnake:brand_name/text_recognize/moran_text_recog
+-DCATKIN_DEVEL_PREFIX=/home/argmm/TTS_and_brandname/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/home/argmm/TTS_and_brandname/catkin_ws/install -G Unix Makefiles

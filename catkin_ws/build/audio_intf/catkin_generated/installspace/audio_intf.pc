@@ -1,0 +1,8 @@
+prefix=/home/argmm/TTS_and_brandname/catkin_ws/install
+
+Name: audio_intf
+Description: Description of audio_intf
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

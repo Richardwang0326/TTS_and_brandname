@@ -1,0 +1,8 @@
+prefix=/home/argmm/TTS_and_brandname/catkin_ws/install
+
+Name: textsnake
+Description: Description of textsnake
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

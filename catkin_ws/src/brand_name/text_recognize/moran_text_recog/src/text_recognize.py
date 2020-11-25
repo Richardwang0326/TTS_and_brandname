@@ -8,9 +8,11 @@ import tf
 import struct
 import math
 import time
+import tf.transformations as tfm
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import CameraInfo, CompressedImage
 from geometry_msgs.msg import PoseArray, PoseStamped
+from geometry_msgs.msg import Pose
 from visualization_msgs.msg import Marker, MarkerArray
 import rospkg
 from cv_bridge import CvBridge, CvBridgeError
@@ -38,6 +40,9 @@ class text_recognize(object):
 		self.commodity_list = []
 		self.read_commodity(r.get_path('text_msgs') + "/config/commodity_list.txt")
 		self.alphabet = '0:1:2:3:4:5:6:7:8:9:a:b:c:d:e:f:g:h:i:j:k:l:m:n:o:p:q:r:s:t:u:v:w:x:y:z:$' 
+
+		self.br = tf.TransformBroadcaster()
+		self.listener = tf.TransformListener()
 
 		self.means = (0.485, 0.456, 0.406)
 		self.stds = (0.229, 0.224, 0.225)
@@ -80,6 +85,7 @@ class text_recognize(object):
 		self.image_pub = rospy.Publisher("~predict_img", Image, queue_size = 1)
 		self.mask = rospy.Publisher("~mask", Image, queue_size = 1)
 		self.img_bbox_pub = rospy.Publisher("~predict_bbox", Image, queue_size = 1)
+		self.obj_pose_pub = rospy.Publisher("/object_pose", Pose, queue_size = 1)
 		#### Service
 		self.predict_ser = rospy.Service("~text_recognize_server", text_recognize_srv, self.srv_callback)
 
@@ -154,6 +160,10 @@ class text_recognize(object):
 		(rows, cols, channels) = img.shape
 		mask = np.zeros([rows, cols], dtype = np.uint8)
 
+		# calculate real world point
+		depth_msg = rospy.wait_for_message("/camera/aligned_depth_to_color/image_raw", Image)
+    	
+
 		for text_bb in msg.text_array:
 			if (text_bb.box.ymax - text_bb.box.ymin) * (text_bb.box.xmax - text_bb.box.xmin) < self.bbox_thres:
 				continue
@@ -222,11 +232,79 @@ class text_recognize(object):
 				# else:
 				# 	cv2.putText(img, sim_preds, (text_bb.box.xmin, text_bb.box.ymin), 0, 1, (0, 0, 0),3)
 				# 	cv2.rectangle(img, (text_bb.box.xmin, text_bb.box.ymin),(text_bb.box.xmax, text_bb.box.ymax), (0, 0, 0), 2)					
+			
+			point = [(text_bb.box.xmin+text_bb.box.xmax)/2,(text_bb.box.ymin+text_bb.box.ymax)/2]
+			self.Finddepth(depth_msg, point)
+			position = self.transform_pose_to_base_link(self.real_world_point,(0,0,0,1))
+			self.br.sendTransform(self.real_world_point,position,rospy.Time.now(),"object","camera_color_optical_frame")
+			
+			obj_pose = Pose()
+			obj_pose.position.x = self.real_world_point[0]
+			obj_pose.position.y = self.real_world_point[1]
+			obj_pose.position.z = self.real_world_point[2]
+			obj_pose.orientation.x = position[0]
+			obj_pose.orientation.y = position[1]
+			obj_pose.orientation.z = position[2]
+			obj_pose.orientation.w = position[3]
+			
+			self.obj_pose_pub.publish(obj_pose)
+
 			print(sim_preds)
 			abc = String()
 			abc.data = sim_preds
 			self.speech_pub.publish(abc)
+
 		return img, mask
+
+
+	def transform_pose_to_base_link(self,t,q):
+
+
+		eu = tfm.euler_from_quaternion(q)
+		tf_cam_col_opt_fram = tfm.compose_matrix(t,eu)
+
+		trans, quat = self.listener.lookupTransform('camera_color_optical_frame','camera_link',rospy.Time(0))
+		euler = tfm.euler_from_quaternion(quat)
+		tf = tfm.compose_matrix(trans,euler)
+
+		t_pose = np.dot(tf, tf_cam_col_opt_fram)
+
+
+		return tuple(quat)
+
+	def Finddepth(self, depth_data, point):
+		xp, yp = point[0], point[1]
+    	# Get the camera calibration parameter for the rectified image
+		msg = rospy.wait_for_message('/camera/color/camera_info', CameraInfo)
+    	#     [fx'  0  cx' Tx]
+    	#P = [ 0  fy' cy' Ty]
+    	#     [ 0   0   1   0]
+		fx = msg.P[0]
+		fy = msg.P[5]
+		cx = msg.P[2]
+		cy = msg.P[6]
+		try:
+			cv_depthimage = self.cv_bridge.imgmsg_to_cv2(depth_data, "32FC1")
+			cv_depthimage2 = np.array(cv_depthimage, dtype=np.float32)
+		except CvBridgeError as e:
+			print(e)
+		if not math.isnan(cv_depthimage2[int(yp)][int(xp)]) :
+			zc = cv_depthimage2[int(yp)][int(xp)]
+			self.real_world_point = self.getXYZ(xp, yp, zc, fx, fy, cx, cy)
+		# return getXYZ(xp, yp, zc, fx, fy, cx, cy)
+		
+	def getXYZ(self, xp, yp, zc, fx,fy,cx,cy):
+    	#### Definition:
+    	# cx, cy : image center(pixel)fd
+    	# fx, fy : focal length
+    	# xp, yp: index of the depth image
+    	# zc: depth
+		inv_fx = 1.0/fx
+		inv_fy = 1.0/fy
+		x = (xp-cx) *  zc * inv_fx / 1000
+		y = (yp-cy) *  zc * inv_fy / 1000
+		z = zc / 1000
+		return (x,y,z)
 
 	def conf_of_word(self, target):
 		### Edit distance
